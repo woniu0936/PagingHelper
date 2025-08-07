@@ -1,10 +1,7 @@
-好的，我已经仔细检查了您整理的 Markdown 文档，发现了一些会导致渲染问题的小瑕疵。主要是部分代码块的语言标识符和标题层级的小问题。
-
-下面是为您**修正并优化了格式**的最终版完整文档。您可以直接复制这段代码，它应该可以在任何标准的 Markdown 渲染器（如 GitHub, Typora, VS Code 预览等）中完美显示。
 
 ---
 
-# 轻量级 Kotlin 分页框架：设计与实现文档 (V3.3)
+# 轻量级 Kotlin 分页框架：设计与实现文档
 
 ## 1. 概述
 
@@ -16,9 +13,10 @@
 *   **状态驱动 UI**: 通过统一的、可携带数据的 `LoadState` 状态机，驱动UI展示所有分页状态。
 *   **生命周期安全**: 所有监听器和异步任务均与组件生命周期绑定，杜绝内存泄漏。
 *   **高性能**: 基于 `ListAdapter` 和 `DiffUtil` 实现高效的列表差分更新。
-*   **卓越的用户体验**: 内置预加载、骨架屏占位符、结构化错误提示等功能。
-*   **优雅的 API**: 提供类似官方库的 `withLoadStateFooter` 扩展函数，简化UI层代码。
+*   **卓越的用户体验**: 内置预加载、**与布局匹配的骨架屏占位符**、结构化错误提示等功能。
+*   **优雅的 API**: 提供类似官方库的 `withLoadStateFooter` 和 **`autoConfiguredGridLayoutManager`** 等扩展函数，简化UI层代码。
 *   **健壮性**: 内置并发控制（Mutex锁），确保数据一致性并防止重复请求。
+*   **高通用性**: 完美适配 `LinearLayoutManager`, `GridLayoutManager`, 和 `StaggeredGridLayoutManager`。
 
 ## 2. 架构设计
 
@@ -42,7 +40,7 @@ graph TD
 
 ## 3. 核心组件详解
 
-### 3.1. 接口与模型 (`PagingModels.kt`)
+### 3.1. 接口与模型 (`PagingCore.kt`)
 
 这部分定义了框架的基础数据结构和契约。
 
@@ -63,11 +61,12 @@ graph TD
     5.  向外暴露 `items` 和 `loadState` 两个 `StateFlow` 作为唯一可信的数据源。
     6.  (可选) 在刷新时，支持立即生成并推送一个占位符列表。
 
-### 3.3. UI 组件 (`Adapters.kt`, `AdapterExtensions.kt`)
+### 3.3. UI 组件 (`PagingUi.kt`)
 
-*   **`ArticleAdapter` (示例)**: 一个纯粹的 `ListAdapter`，它只关心如何渲染业务数据（包括真实数据和占位符），完全不知道分页的存在。
+*   **`ArticleAdapter` (示例)**: 一个**可配置**的 `ListAdapter`，能够根据传入的 `LayoutType` 加载不同的 item 布局和骨架屏布局，职责依然单一。
 *   **`PagingLoadStateAdapter`**: 一个独立的 `Adapter`，专门负责渲染列表末尾的 `Footer`，根据传入的 `LoadState` 显示“加载中”、“加载失败”或“加载完成”的视图。
-*   **`withLoadStateFooter` (扩展函数)**: 这是对 `ConcatAdapter` 的优雅封装。它提供了一个极其简洁的 API，可以将数据 `Adapter` 和状态 `Adapter` 合并，同时处理好 `ViewType` 的隔离，是提升代码可读性的关键。
+*   **`withLoadStateFooter` (扩展函数)**: 对 `ConcatAdapter` 的优雅封装，提供极其简洁的 API 来组合数据和状态 Adapter。
+*   **`autoConfiguredGridLayoutManager` (扩展函数)**: 一个 `GridLayoutManager` 的工厂函数，它创建的 `GridLayoutManager` 能自动处理 Footer 的跨列问题，让调用者无需关心 `SpanSizeLookup` 的细节。
 
 ## 4. 如何使用
 
@@ -75,39 +74,61 @@ graph TD
 
 1.  **实现 `DataSource`**: 根据你的业务数据（如 `Article`），创建一个实现 `DataSource<Key, YourData>` 的类。
 2.  **创建 `ViewModel`**: 在 `ViewModel` 中实例化 `DataSource`，然后创建 `PagingHelper`，并向外暴露 `items` 和 `loadState`。
-3.  **创建数据 `Adapter`**: 创建一个继承自 `ListAdapter` 的 `Adapter`，用于渲染你的业务数据。
+3.  **创建数据 `Adapter`**: 实例化 `ArticleAdapter`，并传入你想要的 `LayoutType`。
 4.  **组装 UI**:
     *   在 `Activity` 或 `Fragment` 中，实例化 `ViewModel`、数据 `Adapter` 和 `PagingLoadStateAdapter`。
     *   使用 `articleAdapter.withLoadStateFooter(loadStateAdapter)` 创建最终的 `ConcatAdapter` 并设置给 `RecyclerView`。
-    *   设置 `SwipeRefreshLayout` 和滚动监听器以实现下拉刷新和预加载。
+    *   根据需要，选择设置 `LinearLayoutManager`、`StaggeredGridLayoutManager` 或调用 `recyclerView.autoConfiguredGridLayoutManager(spanCount)`。
     *   在 `repeatOnLifecycle(STARTED)` 块中，观察 `ViewModel` 的 `items` 和 `loadState`，并驱动 UI 更新。
 
-## 5. 完整代码实现 (V3.3)
+## 5. 完整代码实现 (V3.4)
 
 ### 5.1. Gradle 依赖 (示例)
 ```groovy
 // build.gradle.kts (Module)
 dependencies {
-    // ...
+    // AndroidX Core & UI Components
     implementation("androidx.core:core-ktx:1.9.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation("androidx.cardview:cardview:1.0.0")
+
+    // Lifecycle & ViewModel
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
 
     // For Shimmer Effect (Placeholder)
     implementation("com.facebook.shimmer:shimmer:0.5.0")
 }
 ```
 
-### 5.2. Kotlin 源码
+### 5.2. `res/values/colors.xml`
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    
+    <!-- For Placeholder Backgrounds -->
+    <color name="placeholder_bone_color">#E0E0E0</color>
+    <array name="placeholder_image_colors">
+        <item>#FADBD8</item>
+        <item>#D6EAF8</item>
+        <item>#D1F2EB</item>
+        <item>#FCF3CF</item>
+        <item>#E8DAEF</item>
+        <item>#FDEBD0</item>
+        <item>#D4E6F1</item>
+        <item>#D0ECE7</item>
+    </array>
+</resources>
+```
 
-#### `PagingCore.kt` - 核心模型与引擎
+### 5.3. Kotlin 源码
 
-这个文件包含了框架的基石：数据契约、状态机和分页逻辑处理器。
-
+#### **`PagingCore.kt`** - 核心模型与引擎
 ```kotlin
 package com.example.custompaging.production.final
 
@@ -271,31 +292,38 @@ class PagingHelper<Key : Any, T : Any>(
 // endregion
 ```
 
-#### `PagingUi.kt` - UI 相关组件
-
-这个文件包含了所有与 RecyclerView 相关的 Adapter 和扩展函数。
-
+#### **`PagingUi.kt`** - UI 相关组件
 ```kotlin
 package com.example.custompaging.production.final
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.facebook.shimmer.ShimmerFrameLayout
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 
-// region ==================== 3. UI 组件 (Adapter & Extensions) ====================
+// region ==================== UI 组件 (Adapter & Extensions) ====================
 
 /**
- * [增强] 使用 Sealed Interface 统一表示列表中的所有可能项。
+ * 使用 Sealed Interface 统一表示列表中的所有可能项。
  * 这使得 Adapter 可以用一种类型安全的方式处理多种视图。
  */
 sealed interface ListItem {
@@ -306,10 +334,10 @@ sealed interface ListItem {
 }
 
 /**
- * 纯粹的数据 Adapter，通过 [ListAdapter] 实现，支持渲染真实数据和占位符两种视图。
- * 它完全不知道分页逻辑的存在，职责单一。
+ * 纯粹的数据 Adapter，通过 [ListAdapter] 实现。
+ * [增强] 它可以根据传入的 LayoutType 加载不同的 item 布局和骨架屏布局。
  */
-class ArticleAdapter : ListAdapter<ListItem, RecyclerView.ViewHolder>(
+class ArticleAdapter(private val layoutType: LayoutType) : ListAdapter<ListItem, RecyclerView.ViewHolder>(
     diffCallback = object : DiffUtil.ItemCallback<ListItem>() {
         override fun areItemsTheSame(old: ListItem, new: ListItem): Boolean =
             (old is ListItem.ArticleItem && new is ListItem.ArticleItem && old.article.id == new.article.id) ||
@@ -317,6 +345,17 @@ class ArticleAdapter : ListAdapter<ListItem, RecyclerView.ViewHolder>(
         override fun areContentsTheSame(old: ListItem, new: ListItem): Boolean = old == new
     }
 ) {
+    /** 定义支持的布局类型。 */
+    enum class LayoutType { LINEAR, GRID, STAGGERED }
+
+    /** 懒加载一组用于图片占位的颜色。 */
+    private val placeholderColors by lazy(LazyThreadSafetyMode.NONE) {
+        // 注意：这种方式需要在 ViewHolder 的 onBindViewHolder 中获取 context，这里为了简化演示直接用一个假想的 context
+        // 在实际项目中，最好在 onAttachedToRecyclerView 中初始化
+        intArrayOf(0xFFFADBD8.toInt(), 0xFFD6EAF8.toInt(), 0xFFD1F2EB.toInt(), 0xFFFCF3CF.toInt(),
+                   0xFFE8DAEF.toInt(), 0xFFFDEBD0.toInt(), 0xFFD4E6F1.toInt(), 0xFFD0ECE7.toInt())
+    }
+
     companion object {
         private const val TYPE_ARTICLE = 0
         private const val TYPE_PLACEHOLDER = 1
@@ -324,26 +363,61 @@ class ArticleAdapter : ListAdapter<ListItem, RecyclerView.ViewHolder>(
 
     class ArticleViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val titleView: TextView = view.findViewById(R.id.article_title)
+        val imageView: ImageView = view.findViewById(R.id.article_image)
     }
 
     class PlaceholderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         init { (itemView as? ShimmerFrameLayout)?.startShimmer() }
     }
 
-    override fun getItemViewType(position: Int): Int = when (getItem(position)) {
+    override fun getItemViewType(position: Int) = when (getItem(position)) {
         is ListItem.ArticleItem -> TYPE_ARTICLE
         is ListItem.Placeholder -> TYPE_PLACEHOLDER
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder = if (viewType == TYPE_ARTICLE) {
-        ArticleViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.list_item_article, parent, false))
-    } else {
-        PlaceholderViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.list_item_placeholder, parent, false))
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return if (viewType == TYPE_ARTICLE) {
+            val layoutId = when(layoutType) {
+                LayoutType.LINEAR -> R.layout.list_item_article_linear
+                LayoutType.GRID -> R.layout.list_item_article_grid
+                LayoutType.STAGGERED -> R.layout.list_item_article_staggered
+            }
+            ArticleViewHolder(inflater.inflate(layoutId, parent, false))
+        } else { // viewType is TYPE_PLACEHOLDER
+            val layoutId = when(layoutType) {
+                LayoutType.LINEAR -> R.layout.list_item_placeholder_linear
+                LayoutType.GRID -> R.layout.list_item_placeholder_grid
+                LayoutType.STAGGERED -> R.layout.list_item_placeholder_staggered
+            }
+            PlaceholderViewHolder(inflater.inflate(layoutId, parent, false))
+        }
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        if (holder is ArticleViewHolder) {
-            (getItem(position) as? ListItem.ArticleItem)?.let { holder.titleView.text = "ID: ${it.article.id} - ${it.article.title}" }
+        when (holder) {
+            is ArticleViewHolder -> {
+                (getItem(position) as? ListItem.ArticleItem)?.let { item ->
+                    holder.titleView.text = "ID: ${item.article.id} - ${item.article.title}"
+                    holder.imageView.setBackgroundColor(placeholderColors[position % placeholderColors.size])
+                    // 仅在瀑布流布局下设置随机高度，以突出其错落感
+                    if (layoutType == LayoutType.STAGGERED) {
+                        val lp = holder.itemView.layoutParams
+                        // 使用 item id 的 hashcode 来得到一个稳定的随机高度，避免复用时高度变化
+                        lp.height = (350 + (item.article.id.hashCode() % 400))
+                        holder.itemView.layoutParams = lp
+                    }
+                }
+            }
+            is PlaceholderViewHolder -> {
+                // 仅在瀑布流布局下，为骨架屏也设置随机高度
+                if (layoutType == LayoutType.STAGGERED) {
+                    val lp = holder.itemView.layoutParams
+                    // 使用 position 来得到一个伪随机的高度
+                    lp.height = (350 + (position.hashCode() % 400))
+                    holder.itemView.layoutParams = lp
+                }
+            }
         }
     }
 }
@@ -352,6 +426,11 @@ class ArticleAdapter : ListAdapter<ListItem, RecyclerView.ViewHolder>(
  * Footer Adapter，专门负责展示 Loading / Error / End 状态，设计与 [ConcatAdapter] 配合使用。
  */
 class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapter<PagingLoadStateAdapter.LoadStateViewHolder>() {
+    companion object {
+        /** 定义一个公开的、唯一的 ViewType。使用布局 ID 是一个简单且有效的方式来保证其在 ConcatAdapter 中的唯一性。 */
+        val VIEW_TYPE = R.layout.list_item_footer
+    }
+
     var loadState: LoadState = LoadState.NotLoading
         set(value) {
             if (field != value) {
@@ -372,6 +451,7 @@ class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapt
         }
 
     private fun displayAsItem(state: LoadState) = state is LoadState.Loading || state is LoadState.Error || state is LoadState.End
+    override fun getItemViewType(position: Int) = VIEW_TYPE
     override fun getItemCount(): Int = if (!isDataEmpty && displayAsItem(loadState)) 1 else 0
     override fun onCreateViewHolder(parent: ViewGroup, vt: Int) = LoadStateViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.list_item_footer, parent, false), retry)
     override fun onBindViewHolder(holder: LoadStateViewHolder, pos: Int) = holder.bind(loadState)
@@ -393,28 +473,80 @@ class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapt
 
 /**
  * [最终优化] 一个自定义的扩展函数，模仿 Paging3 库的便捷 API。
- * 它将数据 Adapter 和 PagingLoadStateAdapter 优雅地合并成一个 ConcatAdapter，
- * 隐藏了 ConcatAdapter 的配置细节，使调用代码更简洁。
- *
- * @receiver 数据 Adapter (例如 ArticleAdapter)。
- * @param footer 用于展示加载状态的 PagingLoadStateAdapter。
- * @return 一个配置好的、包含数据和页脚的 ConcatAdapter。
+ * 它将数据 Adapter 和 PagingLoadStateAdapter 优雅地合并成一个 ConcatAdapter。
  */
 fun <T : RecyclerView.Adapter<out RecyclerView.ViewHolder>> T.withLoadStateFooter(
     footer: PagingLoadStateAdapter
 ): ConcatAdapter {
-    val config = ConcatAdapter.Config.Builder()
-        .setIsolateViewTypes(true) // 关键！确保子 Adapter 的 ViewType 不会相互冲突。
-        .build()
+    val config = ConcatAdapter.Config.Builder().setIsolateViewTypes(true).build()
     return ConcatAdapter(config, this, footer)
+}
+
+/**
+ * [便捷API工厂] 创建一个为 ConcatAdapter 自动配置好 SpanSizeLookup 的 GridLayoutManager。
+ * 这使得当使用 GridLayoutManager 时，调用者无需再手动编写 SpanSizeLookup 的模板代码。
+ */
+fun RecyclerView.autoConfiguredGridLayoutManager(spanCount: Int): GridLayoutManager {
+    val layoutManager = GridLayoutManager(context, spanCount)
+    layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+        override fun getSpanSize(position: Int): Int {
+            val concatAdapter = this@autoConfiguredGridLayoutManager.adapter as? ConcatAdapter ?: return 1
+            return if (concatAdapter.getItemViewType(position) == PagingLoadStateAdapter.VIEW_TYPE) spanCount else 1
+        }
+    }
+    return layoutManager
+}
+
+/**
+ * [底层工具] 为 RecyclerView 注册一个生命周期安全的滚动监听器。
+ * 当用户向下滑动到接近列表底部时，会触发 [onLoadMore] 回调。
+ */
+fun RecyclerView.addLoadMoreListener(
+    lifecycleOwner: LifecycleOwner,
+    preloadOffset: Int = 5,
+    onLoadMore: () -> Unit
+) {
+    val listener = object : RecyclerView.OnScrollListener() {
+        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+            if (dy <= 0) return
+            val layoutManager = recyclerView.layoutManager ?: return
+            val totalItemCount = layoutManager.itemCount
+            if(totalItemCount == 0) return
+            val lastVisibleItemPosition = when (layoutManager) {
+                is LinearLayoutManager -> layoutManager.findLastVisibleItemPosition()
+                is StaggeredGridLayoutManager -> layoutManager.findLastVisibleItemPositions(null).maxOrNull() ?: RecyclerView.NO_POSITION
+                else -> return
+            }
+            if (lastVisibleItemPosition == RecyclerView.NO_POSITION) return
+            if (lastVisibleItemPosition >= totalItemCount - preloadOffset) {
+                onLoadMore()
+            }
+        }
+    }
+    lifecycleOwner.lifecycleScope.launch {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            addOnScrollListener(listener)
+            try { awaitCancellation() } finally { removeOnScrollListener(listener) }
+        }
+    }
+}
+
+/**
+ * [便捷API] 将 RecyclerView 的加载更多行为直接绑定到一个 PagingHelper。
+ */
+fun <Key : Any, T : Any> RecyclerView.bindLoadMore(
+    lifecycleOwner: LifecycleOwner,
+    helper: PagingHelper<Key, T>,
+    preloadOffset: Int = 5
+) {
+    addLoadMoreListener(lifecycleOwner, preloadOffset) {
+        helper.loadMore()
+    }
 }
 // endregion
 ```
 
-#### `ArticleFeature.kt` - 业务实现与UI组装
-
-这个文件展示了如何使用上面的核心组件来构建一个具体的功能模块。
-
+#### **`ArticleFeature.kt`** - 业务实现与UI组装
 ```kotlin
 package com.example.custompaging.production.final
 
@@ -431,6 +563,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -457,7 +590,7 @@ class ArticleViewModel : ViewModel() {
         }
     }
 
-    private val helper = PagingHelper(viewModelScope, articleDataSource, placeholderGenerator = { List(10) { ListItem.Placeholder } })
+    val helper = PagingHelper(viewModelScope, articleDataSource, placeholderGenerator = { List(10) { ListItem.Placeholder } })
 
     val items: StateFlow<List<ListItem>> = helper.items
     val loadState: StateFlow<LoadState> = helper.loadState
@@ -471,13 +604,17 @@ class ArticleViewModel : ViewModel() {
 
 // region ==================== 5. UI展现层 (Activity) ====================
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity() { // 可以作为任何一种布局的基类或示例
     companion object {
-        /** [增强] 将预加载阈值提取为可配置常量，便于维护和调整。 */
-        private const val PRELOAD_OFFSET = 5
+        private const val PRELOAD_OFFSET = 10
+        private const val GRID_SPAN_COUNT = 2
     }
+
     private val viewModel: ArticleViewModel by lazy { ViewModelProvider(this)[ArticleViewModel::class.java] }
-    private val articleAdapter = ArticleAdapter()
+    
+    // 实例化时传入想要的布局类型。切换这个枚举值即可改变整个列表的布局！
+    private val articleAdapter = ArticleAdapter(ArticleAdapter.LayoutType.LINEAR) // 或 .GRID, .STAGGERED
+    
     private val loadStateAdapter = PagingLoadStateAdapter { viewModel.retry() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -492,30 +629,17 @@ class MainActivity : AppCompatActivity() {
         val recyclerView: RecyclerView = findViewById(R.id.recycler_view)
         val swipeRefresh: SwipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
         
-        // 使用我们优雅的扩展函数来组装 Adapter
         val concatAdapter = articleAdapter.withLoadStateFooter(loadStateAdapter)
         recyclerView.adapter = concatAdapter
-        recyclerView.layoutManager = LinearLayoutManager(this)
-
-        // 使用 repeatOnLifecycle 来实现生命周期安全的监听器绑定
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                val scrollListener = object : RecyclerView.OnScrollListener() {
-                    override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
-                        if (dy > 0) { // 只在向下滑动时检查
-                            (rv.layoutManager as? LinearLayoutManager)?.let {
-                                if (it.findLastVisibleItemPosition() >= concatAdapter.itemCount - PRELOAD_OFFSET) {
-                                    viewModel.loadMore()
-                                }
-                            }
-                        }
-                    }
-                }
-                recyclerView.addOnScrollListener(scrollListener)
-                // 当 lifecycle 离开 STARTED 状态，协程会被取消，finally 块保证监听器被移除。
-                try { awaitCancellation() } finally { recyclerView.removeOnScrollListener(scrollListener) }
-            }
+        
+        // 根据 Adapter 的类型选择合适的 LayoutManager
+        recyclerView.layoutManager = when(articleAdapter.layoutType) {
+            ArticleAdapter.LayoutType.LINEAR -> LinearLayoutManager(this)
+            ArticleAdapter.LayoutType.GRID -> recyclerView.autoConfiguredGridLayoutManager(GRID_SPAN_COUNT)
+            ArticleAdapter.LayoutType.STAGGERED -> StaggeredGridLayoutManager(GRID_SPAN_COUNT, StaggeredGridLayoutManager.VERTICAL)
         }
+
+        recyclerView.bindLoadMore(this, viewModel.helper, PRELOAD_OFFSET)
         
         swipeRefresh.setOnRefreshListener {
             swipeRefresh.isRefreshing = true
@@ -564,13 +688,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-// endregion
-```
+// endregion```
 
-### 5.3. XML 布局文件
+### 5.4. XML 布局文件
 
-#### `activity_main.xml`
-```xml
+#### **`activity_main.xml`**```xml
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -586,8 +708,7 @@ class MainActivity : AppCompatActivity() {
             android:id="@+id/recycler_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scrollbars="vertical"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"/>
+            android:scrollbars="vertical" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <LinearLayout
@@ -619,53 +740,264 @@ class MainActivity : AppCompatActivity() {
 </androidx.constraintlayout.widget.ConstraintLayout>
 ```
 
-#### `list_item_article.xml`
+#### **`list_item_article_linear.xml`**
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<androidx.cardview.widget.CardView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp"
-    android:paddingTop="12dp"
-    android:paddingBottom="12dp"
-    android:background="?android:attr/selectableItemBackground"
-    android:clickable="true"
-    android:focusable="true">
+    android:layout_marginStart="12dp"
+    android:layout_marginEnd="12dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
 
-    <TextView
-        android:id="@+id/article_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:textColor="@android:color/black"
-        android:textStyle="bold"
-        tools:text="ID: 123 - This is a sample article title" />
-</LinearLayout>
-```
-
-#### `list_item_placeholder.xml`
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<com.facebook.shimmer.ShimmerFrameLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content">
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
-        <View android:layout_width="match_parent" android:layout_height="20dp" android:background="#E0E0E0"/>
-        <View android:layout_width="150dp" android:layout_height="20dp" android:layout_marginTop="8dp" android:background="#E0E0E0"/>
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/article_image"
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:scaleType="centerCrop"
+            tools:background="#D6EAF8"
+            android:contentDescription="Article Image" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/article_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="16sp"
+                android:textColor="@android:color/black"
+                android:textStyle="bold"
+                android:maxLines="2"
+                android:ellipsize="end"
+                tools:text="ID: 1 - A Beautiful Article Title for Linear Layout" />
+        </LinearLayout>
     </LinearLayout>
-</com.facebook.shimmer.ShimmerFrameLayout>
+</androidx.cardview.widget.CardView>
 ```
 
-#### `list_item_footer.xml`
+#### **`list_item_article_grid.xml`**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/article_image"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:scaleType="centerCrop"
+            tools:background="#D1F2EB"
+            android:contentDescription="Article Image" />
+
+        <TextView
+            android:id="@+id/article_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="8dp"
+            android:textSize="14sp"
+            android:textColor="@android:color/black"
+            android:maxLines="2"
+            android:ellipsize="end"
+            tools:text="ID: 2 - Grid Item Title" />
+    </LinearLayout>
+</androidx.cardview.widget.CardView>
+```
+
+#### **`list_item_article_staggered.xml`**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/article_image"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:scaleType="centerCrop"
+            tools:background="#FCF3CF"
+            android:contentDescription="Article Image"
+            tools:layout_height="200dp"/>
+
+        <TextView
+            android:id="@+id/article_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="8dp"
+            android:textSize="14sp"
+            android:textColor="@android:color/black"
+            android:maxLines="2"
+            android:ellipsize="end"
+            tools:text="ID: 3 - Staggered Item" />
+    </LinearLayout>
+</androidx.cardview.widget.CardView>
+```
+
+#### **`list_item_placeholder_linear.xml`**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="12dp"
+    android:layout_marginEnd="12dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+    <com.facebook.shimmer.ShimmerFrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:shimmer_auto_start="true">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="180dp"
+                android:background="@color/placeholder_bone_color" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="20dp"
+                    android:background="@color/placeholder_bone_color" />
+                <View
+                    android:layout_width="60%"
+                    android:layout_height="16dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@color/placeholder_bone_color" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.facebook.shimmer.ShimmerFrameLayout>
+</androidx.cardview.widget.CardView>
+```
+
+#### **`list_item_placeholder_grid.xml`**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+    <com.facebook.shimmer.ShimmerFrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:shimmer_auto_start="true">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:background="@color/placeholder_bone_color" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp">
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="16dp"
+                    android:background="@color/placeholder_bone_color" />
+                <View
+                    android:layout_width="70%"
+                    android:layout_height="16dp"
+                    android:layout_marginTop="4dp"
+                    android:background="@color/placeholder_bone_color" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.facebook.shimmer.ShimmerFrameLayout>
+</androidx.cardview.widget.CardView>
+```
+
+#### **`list_item_placeholder_staggered.xml`**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+    <com.facebook.shimmer.ShimmerFrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:shimmer_auto_start="true">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <View
+                android:id="@+id/placeholder_image_area"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/placeholder_bone_color"
+                tools:layout_height="180dp"/>
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="16dp"
+                android:layout_margin="8dp"
+                android:background="@color/placeholder_bone_color" />
+        </LinearLayout>
+    </com.facebook.shimmer.ShimmerFrameLayout>
+</androidx.cardview.widget.CardView>
+```
+
+#### **`list_item_footer.xml`**
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
