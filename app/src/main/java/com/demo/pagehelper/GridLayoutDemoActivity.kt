@@ -51,7 +51,21 @@ class GridLayoutDemoActivity : AppCompatActivity() {
         recyclerView.adapter = concatAdapter
 
         // 4. (关键修正) 设置 SpanSizeLookup，让 Footer 占据整行
-        recyclerView.autoConfiguredGridLayoutManager(GRID_SPAN_COUNT)
+        gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int {
+                // ============================ [最终修正] ============================
+                // 这是最健壮的判断方式：
+                // 1. 检查当前 position 是否是 ConcatAdapter 中的最后一项。
+                // 2. 检查 loadStateAdapter 是否真的有内容要显示 (itemCount > 0)。
+                // 只有同时满足这两个条件，才说明这个位置是需要占据整行的 Footer。
+                return if (position == concatAdapter.itemCount - 1 && loadStateAdapter.itemCount > 0) {
+                    GRID_SPAN_COUNT // Footer 占据所有列
+                } else {
+                    1 // 普通数据项占据一列
+                }
+                // =================================================================
+            }
+        }
 
         // 5. 将配置好的 LayoutManager 设置给 RecyclerView
         recyclerView.layoutManager = gridLayoutManager

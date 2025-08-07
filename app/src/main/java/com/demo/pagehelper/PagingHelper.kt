@@ -278,14 +278,6 @@ open class ArticleAdapter(private val layoutType: LayoutType) : ListAdapter<List
  */
 class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapter<PagingLoadStateAdapter.LoadStateViewHolder>() {
 
-    companion object {
-        /**
-         * 定义一个公开的、唯一的 ViewType。
-         * 使用布局 ID 是一个简单且有效的方式来保证其在 ConcatAdapter 中的唯一性。
-         */
-        val VIEW_TYPE = R.layout.list_item_footer
-    }
-
     var loadState: LoadState = LoadState.NotLoading
         set(value) {
             if (field != value) {
@@ -316,11 +308,6 @@ class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapt
         LoadStateViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.list_item_footer, parent, false), retry)
 
     override fun onBindViewHolder(holder: LoadStateViewHolder, pos: Int) = holder.bind(loadState)
-
-    override fun getItemViewType(position: Int): Int {
-        // 总是返回这个固定的 ViewType
-        return VIEW_TYPE
-    }
 
     class LoadStateViewHolder(itemView: View, retry: () -> Unit) : RecyclerView.ViewHolder(itemView) {
         private val progress: ProgressBar = itemView.findViewById(R.id.footer_progress)
@@ -491,17 +478,18 @@ fun RecyclerView.autoConfiguredGridLayoutManager(spanCount: Int): GridLayoutMana
         override fun getSpanSize(position: Int): Int {
             val concatAdapter = this@autoConfiguredGridLayoutManager.adapter as? ConcatAdapter
             if (concatAdapter == null) {
-                // 如果 adapter 不是 ConcatAdapter，则所有项都占一列
+                // 如果 adapter 不存在或不是 ConcatAdapter，则所有项都按默认占一列。
                 return 1
             }
+            // 采用基于 position 的判断逻辑，这是在 isolateViewTypes=true 下的正确做法。
+            // 1. 检查当前 position 是否是 ConcatAdapter 中的最后一项。
+            // 2. 检查 loadStateAdapter 是否真的有内容要显示 (itemCount > 0)。
+            // 只有同时满足这两个条件，才说明这个位置是需要占据整行的 Footer。
 
-            // 通过 viewType 来判断是否是 Footer，这种方式比 position 判断更健壮
-            val viewType = concatAdapter.getItemViewType(position)
+            // 获取 loadStateAdapter，它被假定为 ConcatAdapter 中的最后一个 adapter
+            val loadStateAdapter = concatAdapter.adapters.lastOrNull { it is PagingLoadStateAdapter } as? PagingLoadStateAdapter
 
-            // 查找 loadStateAdapter 的 viewType。
-            // 假设 PagingLoadStateAdapter 的 onCreateViewHolder 总是返回相同的 viewType
-            // 我们可以在 PagingLoadStateAdapter 中定义一个常量
-            return if (viewType == PagingLoadStateAdapter.VIEW_TYPE) {
+            return if (loadStateAdapter != null && position == concatAdapter.itemCount - 1 && loadStateAdapter.itemCount > 0) {
                 spanCount // 如果是 Footer，占据所有列
             } else {
                 1 // 否则，占据一列

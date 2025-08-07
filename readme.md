@@ -688,11 +688,11 @@ class MainActivity : AppCompatActivity() { // 可以作为任何一种布局的�
         }
     }
 }
-// endregion```
-
+// endregion
+```
 ### 5.4. XML 布局文件
 
-#### **`activity_main.xml`**```xml
+#### **`activity_main.xml`**
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -738,6 +738,7 @@ class MainActivity : AppCompatActivity() { // 可以作为任何一种布局的�
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>
+```
 ```
 
 #### **`list_item_article_linear.xml`**
