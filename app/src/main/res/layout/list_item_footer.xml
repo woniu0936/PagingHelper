@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center"
+    android:padding="16dp">
+
+    <!-- 加载中状态：显示一个进度条 -->
+    <ProgressBar
+        android:id="@+id/footer_progress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
+    <!-- 加载失败状态：显示一个重试按钮 -->
+    <Button
+        android:id="@+id/footer_retry_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="加载失败，点击重试"
+        android:visibility="gone"
+        tools:visibility="gone" />
+
+    <!-- 没有更多了状态：显示一段提示文字 -->
+    <TextView
+        android:id="@+id/footer_end_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="--- 我是有底线的 ---"
+        android:textColor="@android:color/darker_gray"
+        android:textSize="14sp"
+        android:visibility="gone"
+        tools:visibility="gone" />
+
+</LinearLayout>
