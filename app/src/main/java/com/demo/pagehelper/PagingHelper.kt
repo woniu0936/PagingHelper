@@ -4,6 +4,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -15,6 +16,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -176,7 +178,7 @@ sealed interface ListItem {
 /**
  * 纯粹的数据 Adapter，通过 [ListAdapter] 实现，支持渲染真实数据和占位符两种视图。
  */
-class ArticleAdapter : ListAdapter<ListItem, RecyclerView.ViewHolder>(itemDiff) {
+open class ArticleAdapter(private val layoutType: LayoutType) : ListAdapter<ListItem, RecyclerView.ViewHolder>(itemDiff) {
     companion object {
         private const val TYPE_ARTICLE = 0
         private const val TYPE_PLACEHOLDER = 1
@@ -190,13 +192,25 @@ class ArticleAdapter : ListAdapter<ListItem, RecyclerView.ViewHolder>(itemDiff) 
         }
     }
 
+    enum class LayoutType {
+        LINEAR, GRID, STAGGERED
+    }
+
+    private val placeholderColors = intArrayOf(
+        R.color.placeholder_bg_1, R.color.placeholder_bg_2, R.color.placeholder_bg_3,
+        R.color.placeholder_bg_4, R.color.placeholder_bg_5, R.color.placeholder_bg_6,
+        R.color.placeholder_bg_7, R.color.placeholder_bg_8
+    )
+
     class ArticleViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val titleView: TextView = view.findViewById(R.id.article_title)
+        val imageView: ImageView = view.findViewById(R.id.article_image)
     }
 
     class PlaceholderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         init {
-            (itemView as? ShimmerFrameLayout)?.startShimmer()
+            // ShimmerFrameLayout 可能在 CardView 内部，需要查找
+            (itemView.findViewWithTag<ShimmerFrameLayout>("shimmer_tag") ?: itemView as? ShimmerFrameLayout)?.startShimmer()
         }
     }
 
@@ -205,15 +219,56 @@ class ArticleAdapter : ListAdapter<ListItem, RecyclerView.ViewHolder>(itemDiff) 
         is ListItem.Placeholder -> TYPE_PLACEHOLDER
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder = if (viewType == TYPE_ARTICLE) {
-        ArticleViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.list_item_article, parent, false))
-    } else {
-        PlaceholderViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.list_item_placeholder, parent, false))
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return if (viewType == TYPE_ARTICLE) {
+            val layoutId = when(layoutType) {
+                LayoutType.LINEAR -> R.layout.list_item_article_linear
+                LayoutType.GRID -> R.layout.list_item_article_grid
+                LayoutType.STAGGERED -> R.layout.list_item_article_staggered
+            }
+            ArticleViewHolder(inflater.inflate(layoutId, parent, false))
+        } else { // viewType is TYPE_PLACEHOLDER
+            val layoutId = when(layoutType) {
+                LayoutType.LINEAR -> R.layout.list_item_placeholder_linear_placeholder
+                LayoutType.GRID -> R.layout.list_item_placeholder_grid_placeholder
+                LayoutType.STAGGERED -> R.layout.list_item_placeholder_staggered_placeholder
+            }
+            PlaceholderViewHolder(inflater.inflate(layoutId, parent, false))
+        }
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         if (holder is ArticleViewHolder) {
-            (getItem(position) as? ListItem.ArticleItem)?.let { holder.titleView.text = "ID: ${it.article.id} - ${it.article.title}" }
+
+        }
+        when (holder) {
+            is ArticleViewHolder -> {
+                (getItem(position) as? ListItem.ArticleItem)?.let { item ->
+                    holder.titleView.text = "ID: ${item.article.id} - ${item.article.title}"
+
+                    // 设置随机背景色
+                    val colorRes = placeholderColors[position % placeholderColors.size]
+                    holder.imageView.setBackgroundResource(colorRes)
+
+                    // 仅在瀑布流布局下设置随机高度
+                    if (layoutType == LayoutType.STAGGERED) {
+                        val lp = holder.itemView.layoutParams
+                        // 使用 position hashcode 来得到一个稳定的随机高度，避免复用时高度变化
+                        lp.height = (300 + (item.article.id.hashCode() % 300))
+                        holder.itemView.layoutParams = lp
+                    }
+                }
+            }
+            is PlaceholderViewHolder -> {
+                // 仅在瀑布流布局下，为骨架屏设置随机高度
+                if (layoutType == LayoutType.STAGGERED) {
+                    val lp = holder.itemView.layoutParams
+                    // 使用 position 来得到一个伪随机的高度
+                    lp.height = (300 + (position.hashCode() % 300))
+                    holder.itemView.layoutParams = lp
+                }
+            }
         }
     }
 }
@@ -222,6 +277,15 @@ class ArticleAdapter : ListAdapter<ListItem, RecyclerView.ViewHolder>(itemDiff) 
  * Footer Adapter，负责展示 Loading / Error / End 状态，设计与 [ConcatAdapter] 配合使用。
  */
 class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapter<PagingLoadStateAdapter.LoadStateViewHolder>() {
+
+    companion object {
+        /**
+         * 定义一个公开的、唯一的 ViewType。
+         * 使用布局 ID 是一个简单且有效的方式来保证其在 ConcatAdapter 中的唯一性。
+         */
+        val VIEW_TYPE = R.layout.list_item_footer
+    }
+
     var loadState: LoadState = LoadState.NotLoading
         set(value) {
             if (field != value) {
@@ -252,6 +316,11 @@ class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapt
         LoadStateViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.list_item_footer, parent, false), retry)
 
     override fun onBindViewHolder(holder: LoadStateViewHolder, pos: Int) = holder.bind(loadState)
+
+    override fun getItemViewType(position: Int): Int {
+        // 总是返回这个固定的 ViewType
+        return VIEW_TYPE
+    }
 
     class LoadStateViewHolder(itemView: View, retry: () -> Unit) : RecyclerView.ViewHolder(itemView) {
         private val progress: ProgressBar = itemView.findViewById(R.id.footer_progress)
@@ -292,7 +361,7 @@ class ArticleViewModel : ViewModel() {
         }
     }
 
-    val helper = PagingHelper(viewModelScope, articleDataSource, placeholderGenerator = { List(10) { ListItem.Placeholder } })
+    val helper = PagingHelper(viewModelScope, articleDataSource, placeholderGenerator = { List(20) { ListItem.Placeholder } })
 
     val items: StateFlow<List<ListItem>> = helper.items
     val loadState: StateFlow<LoadState> = helper.loadState
@@ -406,6 +475,40 @@ fun <Key : Any, T : Any> RecyclerView.bindLoadMore(
     addLoadMoreListener(lifecycleOwner, preloadOffset) {
         helper.loadMore()
     }
+}
+
+/**
+ * [便捷API工厂] 创建一个为 ConcatAdapter 自动配置好 SpanSizeLookup 的 GridLayoutManager。
+ * 这使得当使用 GridLayoutManager 时，调用者无需再手动编写 SpanSizeLookup 的模板代码，
+ * 实现了与 StaggeredGridLayoutManager 类似的使用体验。
+ *
+ * @param spanCount 网格的列数。
+ * @return 一个配置好的、能自动让 PagingLoadStateAdapter 的 Footer 跨列的 GridLayoutManager。
+ */
+fun RecyclerView.autoConfiguredGridLayoutManager(spanCount: Int): GridLayoutManager {
+    val layoutManager = GridLayoutManager(context, spanCount)
+    layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+        override fun getSpanSize(position: Int): Int {
+            val concatAdapter = this@autoConfiguredGridLayoutManager.adapter as? ConcatAdapter
+            if (concatAdapter == null) {
+                // 如果 adapter 不是 ConcatAdapter，则所有项都占一列
+                return 1
+            }
+
+            // 通过 viewType 来判断是否是 Footer，这种方式比 position 判断更健壮
+            val viewType = concatAdapter.getItemViewType(position)
+
+            // 查找 loadStateAdapter 的 viewType。
+            // 假设 PagingLoadStateAdapter 的 onCreateViewHolder 总是返回相同的 viewType
+            // 我们可以在 PagingLoadStateAdapter 中定义一个常量
+            return if (viewType == PagingLoadStateAdapter.VIEW_TYPE) {
+                spanCount // 如果是 Footer，占据所有列
+            } else {
+                1 // 否则，占据一列
+            }
+        }
+    }
+    return layoutManager
 }
 
 // endregion

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="4dp">
+
+    <com.facebook.shimmer.ShimmerFrameLayout
+        android:id="@+id/shimmer_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:shimmer_auto_start="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- 骨架 - 图片区域 -->
+            <!-- 高度将通过代码设置，这里给一个 tools:layout_height 方便预览 -->
+            <View
+                android:id="@+id/placeholder_image"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/placeholder_bone_color"
+                tools:layout_height="180dp"/>
+
+            <!-- 骨架 - 文字区域 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="16dp"
+                android:layout_margin="8dp"
+                android:background="@color/placeholder_bone_color" />
+        </LinearLayout>
+    </com.facebook.shimmer.ShimmerFrameLayout>
+</androidx.cardview.widget.CardView>

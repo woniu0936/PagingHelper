@@ -2,4 +2,14 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- A nice palette for placeholder backgrounds -->
+    <color name="placeholder_bg_1">#FADBD8</color>
+    <color name="placeholder_bg_2">#D6EAF8</color>
+    <color name="placeholder_bg_3">#D1F2EB</color>
+    <color name="placeholder_bg_4">#FCF3CF</color>
+    <color name="placeholder_bg_5">#E8DAEF</color>
+    <color name="placeholder_bg_6">#FDEBD0</color>
+    <color name="placeholder_bg_7">#D4E6F1</color>
+    <color name="placeholder_bg_8">#D0ECE7</color>
+    <color name="placeholder_bone_color">#E0E0E0</color>
 </resources>
