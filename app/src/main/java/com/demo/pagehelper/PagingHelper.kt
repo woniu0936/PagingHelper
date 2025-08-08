@@ -178,7 +178,7 @@ sealed interface ListItem {
 /**
  * 纯粹的数据 Adapter，通过 [ListAdapter] 实现，支持渲染真实数据和占位符两种视图。
  */
-open class ArticleAdapter(private val layoutType: LayoutType) : ListAdapter<ListItem, RecyclerView.ViewHolder>(itemDiff) {
+open class ArticleAdapter(val layoutType: LayoutType) : ListAdapter<ListItem, RecyclerView.ViewHolder>(itemDiff) {
     companion object {
         private const val TYPE_ARTICLE = 0
         private const val TYPE_PLACEHOLDER = 1

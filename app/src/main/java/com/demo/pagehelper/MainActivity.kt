@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.demo.pagehelper.flowdata.FlowDataSourceActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -35,5 +36,11 @@ class MainActivity : AppCompatActivity() {
                 startActivity(this)
             }
         }
+        findViewById<Button>(R.id.btn_flow).setOnClickListener {
+            Intent(this, FlowDataSourceActivity::class.java).apply {
+                startActivity(this)
+            }
+        }
+
     }
 }

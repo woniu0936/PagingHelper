@@ -23,6 +23,7 @@
         <activity android:name=".LinearDemoActivity"/>
         <activity android:name=".GridLayoutDemoActivity"/>
         <activity android:name=".StaggeredGridDemoActivity"/>
+        <activity android:name=".flowdata.FlowDataSourceActivity"/>
     </application>
 
 </manifest>
