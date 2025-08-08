@@ -23,7 +23,7 @@ class GridLayoutDemoActivity : AppCompatActivity() {
     }
 
     private val viewModel: ArticleViewModel by lazy { ViewModelProvider(this)[ArticleViewModel::class.java] }
-    private val articleAdapter = ArticleAdapter(ArticleAdapter.LayoutType.GRID)
+    private val articleAdapter = ArticleAdapter(LayoutType.GRID)
     private val loadStateAdapter = PagingLoadStateAdapter { viewModel.retry() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,12 +104,12 @@ class GridLayoutDemoActivity : AppCompatActivity() {
                 launch {
                     viewModel.loadState.collect { state ->
                         loadStateAdapter.loadState = state
-                        if (state !is LoadState.Loading) swipeRefresh.isRefreshing = false
+                        if (state !is LoadState.Refresh.Error) swipeRefresh.isRefreshing = false
 
                         val isListEffectivelyEmpty = articleAdapter.currentList.isEmpty() || articleAdapter.currentList.all { it is ListItem.Placeholder }
 
-                        fullScreenError.isVisible = isListEffectivelyEmpty && state is LoadState.Error
-                        if (state is LoadState.Error) {
+                        fullScreenError.isVisible = isListEffectivelyEmpty && state is LoadState.Append.Error
+                        if (state is LoadState.Append.Error) {
                             errorTextView.text = when (state.error) {
                                 is PagingError.Network -> "网络连接失败，请检查设置"
                                 is PagingError.Server -> "服务器开小差了 (Code: ${state.error.code})"

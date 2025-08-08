@@ -89,12 +89,30 @@ fun Throwable.toPagingError(): PagingError {
 }
 
 /**
- * 列表加载状态机，持有 [PagingError] 以提供丰富的错误信息。
+ * [终极修正] 列表加载状态机，将 Refresh 和 Append 的状态完全分离。
+ * 这从根本上解决了状态混淆和UI显示冲突的问题。
  */
 sealed class LoadState {
-    object Loading : LoadState()
-    data class Error(val error: PagingError) : LoadState()
+    /** 刷新操作的状态。通常影响整个屏幕（如骨架屏、下拉刷新圈）。 */
+    sealed class Refresh : LoadState() {
+        /** 正在刷新中。 */
+        object Loading : Refresh()
+        /** 刷新失败。 */
+        data class Error(val error: PagingError) : Refresh()
+    }
+
+    /** 加载更多操作的状态。通常只影响列表末尾的 Footer。 */
+    sealed class Append : LoadState() {
+        /** 正在加载更多。 */
+        object Loading : Append()
+        /** 加载更多失败。 */
+        data class Error(val error: PagingError) : Append()
+    }
+
+    /** 已加载全部数据，没有更多了。这是一个终端状态。 */
     object End : LoadState()
+
+    /** 初始状态或操作成功后的空闲状态。 */
     object NotLoading : LoadState()
 }
 
@@ -139,25 +157,77 @@ class PagingHelper<Key : Any, T : Any>(
     /** 重试上一次失败的操作。 */
     fun retry() = scope.launch { lastFailedCall?.let { (type, key) -> performLoad(type, key) } }
 
+    /**
+     * [最终修正版] 执行实际的加载操作。
+     * 内部通过 Mutex 保证原子性和线程安全，并使用分离的 LoadState 来精确地表达当前操作的状态。
+     *
+     * @param loadType 当前操作的类型 (REFRESH 或 APPEND)。
+     * @param key 用于本次加载的键 (页码、cursor等)。
+     */
     private suspend fun performLoad(loadType: LoadType, key: Key?) {
-        // 通过检查当前状态实现防抖，防止在加载中时重复触发加载更多。
-        if (loadType == LoadType.APPEND && _loadState.value is LoadState.Loading) return
+        // 防抖/节流：如果正在加载更多，则忽略新的加载更多请求。
+        if (loadType == LoadType.APPEND && _loadState.value is LoadState.Append.Loading) {
+            return
+        }
 
+        // 使用 Mutex 确保同一时间只有一个加载任务在执行，避免并发问题。
         mutex.withLock {
-            if (loadType == LoadType.APPEND && (_loadState.value is LoadState.Loading || _loadState.value is LoadState.End)) return
+            // 在锁内双重检查，防止在等待锁的过程中状态已改变。
+            if (loadType == LoadType.APPEND && (_loadState.value is LoadState.Append.Loading || _loadState.value is LoadState.End)) {
+                return
+            }
 
-            _loadState.value = LoadState.Loading
+            // 如果是加载更多，但下一页的 key 已经是 null，说明已经到底了，直接更新状态并返回。
+            if (loadType == LoadType.APPEND && key == null) {
+                _loadState.value = LoadState.End
+                return
+            }
+
+            // 根据操作类型，立即更新 LoadState，UI 会立刻响应。
+            _loadState.value = if (loadType == LoadType.REFRESH) {
+                LoadState.Refresh.Loading
+            } else {
+                LoadState.Append.Loading
+            }
+
             runCatching {
+                // 执行真正的、可能会失败的数据加载操作。
                 dataSource.loadPage(key)
             }.onSuccess { result ->
-                lastFailedCall = null
-                nextKey = result.nextKey
-                val currentItems = if (loadType == LoadType.REFRESH || _items.value.any { it is ListItem.Placeholder }) emptyList() else _items.value
-                _items.value = currentItems + result.data
-                _loadState.value = if (result.nextKey == null) LoadState.End else LoadState.NotLoading
+                // 请求成功
+                lastFailedCall = null // 清除失败记录
+                nextKey = result.nextKey // 更新下一页的 key
+
+                // 根据操作类型更新数据列表
+                if (loadType == LoadType.REFRESH) {
+                    _items.value = result.data // 刷新操作，完全替换列表
+                } else {
+                    // 加载更多操作，追加数据
+                    // 检查当前列表是否是占位符，如果是，则先清空
+                    val currentItems = if (_items.value.any { it is ListItem.Placeholder }) emptyList() else _items.value
+                    _items.value = currentItems + result.data
+                }
+
+                // 根据 nextKey 判断是否已经加载完所有数据
+                _loadState.value = if (result.nextKey == null) {
+                    LoadState.End
+                } else {
+                    LoadState.NotLoading
+                }
+
             }.onFailure { throwable ->
-                lastFailedCall = loadType to key
-                _loadState.value = LoadState.Error(throwable.toPagingError())
+                // 请求失败
+                lastFailedCall = loadType to key // 记录失败的上下文，以便重试
+
+                // 将底层异常转换为业务错误
+                val error = throwable.toPagingError()
+
+                // 根据操作类型，更新为对应的 Error 状态
+                _loadState.value = if (loadType == LoadType.REFRESH) {
+                    LoadState.Refresh.Error(error)
+                } else {
+                    LoadState.Append.Error(error)
+                }
             }
         }
     }
@@ -175,6 +245,10 @@ sealed interface ListItem {
     object Placeholder : ListItem
 }
 
+enum class LayoutType {
+    LINEAR, GRID, STAGGERED
+}
+
 /**
  * 纯粹的数据 Adapter，通过 [ListAdapter] 实现，支持渲染真实数据和占位符两种视图。
  */
@@ -190,10 +264,6 @@ open class ArticleAdapter(val layoutType: LayoutType) : ListAdapter<ListItem, Re
 
             override fun areContentsTheSame(old: ListItem, new: ListItem): Boolean = old == new
         }
-    }
-
-    enum class LayoutType {
-        LINEAR, GRID, STAGGERED
     }
 
     private val placeholderColors = intArrayOf(
@@ -239,9 +309,6 @@ open class ArticleAdapter(val layoutType: LayoutType) : ListAdapter<ListItem, Re
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        if (holder is ArticleViewHolder) {
-
-        }
         when (holder) {
             is ArticleViewHolder -> {
                 (getItem(position) as? ListItem.ArticleItem)?.let { item ->
@@ -280,13 +347,15 @@ class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapt
 
     var loadState: LoadState = LoadState.NotLoading
         set(value) {
+            // 只处理影响 Footer 的状态
+            val relevantState = value is LoadState.Append || value is LoadState.End
+            val oldRelevantState = field is LoadState.Append || field is LoadState.End
+
             if (field != value) {
-                val oldItemVisible = displayAsItem(field)
-                val newItemVisible = displayAsItem(value)
                 field = value
-                if (oldItemVisible != newItemVisible) {
-                    if (newItemVisible) notifyItemInserted(0) else notifyItemRemoved(0)
-                } else if (newItemVisible) {
+                if (relevantState != oldRelevantState) {
+                    if (relevantState) notifyItemInserted(0) else notifyItemRemoved(0)
+                } else if (relevantState) {
                     notifyItemChanged(0)
                 }
             }
@@ -302,7 +371,7 @@ class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapt
             }
         }
 
-    private fun displayAsItem(state: LoadState) = state is LoadState.Loading || state is LoadState.Error || state is LoadState.End
+    private fun displayAsItem(state: LoadState) = state is LoadState.Append || state is LoadState.End
     override fun getItemCount(): Int = if (!isDataEmpty && displayAsItem(loadState)) 1 else 0
     override fun onCreateViewHolder(parent: ViewGroup, vt: Int) =
         LoadStateViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.list_item_footer, parent, false), retry)
@@ -320,8 +389,8 @@ class PagingLoadStateAdapter(private val retry: () -> Unit) : RecyclerView.Adapt
 
         fun bind(state: LoadState) {
             (itemView.layoutParams as? StaggeredGridLayoutManager.LayoutParams)?.isFullSpan = true
-            progress.isVisible = state is LoadState.Loading
-            retryButton.isVisible = state is LoadState.Error
+            progress.isVisible = state is LoadState.Append.Loading
+            retryButton.isVisible = state is LoadState.Append.Error
             endText.isVisible = state is LoadState.End
         }
     }

@@ -13,10 +13,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.demo.pagehelper.ArticleAdapter
+import com.demo.pagehelper.LayoutType
 import com.demo.pagehelper.ListItem
 import com.demo.pagehelper.LoadState
-import com.demo.pagehelper.PagingError
 import com.demo.pagehelper.PagingLoadStateAdapter
 import com.demo.pagehelper.R
 import com.demo.pagehelper.autoConfiguredGridLayoutManager
@@ -33,8 +32,10 @@ class FlowDataSourceActivity : AppCompatActivity() {
 
     private val viewModel: FlowDataSourceViewModel by lazy { ViewModelProvider(this)[FlowDataSourceViewModel::class.java] }
 
-    // 切换这个枚举值即可改变整个列表的布局！
-    private val articleAdapter = ArticleAdapter(ArticleAdapter.LayoutType.GRID) // 或 .LINEAR, .STAGGERED
+    // 切换这个枚举值即可改变整个列表的布局！// 第一个参数.GRID或 .LINEAR, .STAGGERED
+    private val articleAdapter = FlowArticleAdapter(LayoutType.GRID) { articleId ->
+        viewModel.toggleSelection(articleId)
+    }
 
     private val loadStateAdapter = PagingLoadStateAdapter { viewModel.retry() }
 
@@ -54,10 +55,10 @@ class FlowDataSourceActivity : AppCompatActivity() {
         recyclerView.adapter = concatAdapter
 
         // 根据 Adapter 的类型选择合适的 LayoutManager
-        recyclerView.layoutManager = when(articleAdapter.layoutType) {
-            ArticleAdapter.LayoutType.LINEAR -> LinearLayoutManager(this)
-            ArticleAdapter.LayoutType.GRID -> recyclerView.autoConfiguredGridLayoutManager(GRID_SPAN_COUNT)
-            ArticleAdapter.LayoutType.STAGGERED -> StaggeredGridLayoutManager(GRID_SPAN_COUNT, StaggeredGridLayoutManager.VERTICAL)
+        recyclerView.layoutManager = when (articleAdapter.layoutType) {
+            LayoutType.LINEAR -> LinearLayoutManager(this)
+            LayoutType.GRID -> recyclerView.autoConfiguredGridLayoutManager(GRID_SPAN_COUNT)
+            LayoutType.STAGGERED -> StaggeredGridLayoutManager(GRID_SPAN_COUNT, StaggeredGridLayoutManager.VERTICAL)
         }
 
         recyclerView.bindLoadMore(this, viewModel.helper, PRELOAD_OFFSET)
@@ -79,32 +80,37 @@ class FlowDataSourceActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch {
-                    viewModel.items.collect { list ->
-                        articleAdapter.submitList(list)
-                        loadStateAdapter.isDataEmpty = list.isEmpty()
-                    }
-                }
-                launch {
-                    viewModel.loadState.collect { state ->
-                        loadStateAdapter.loadState = state
-                        if (state !is LoadState.Loading) swipeRefresh.isRefreshing = false
+                // [修正] 只观察这一个 uiState Flow！
+                viewModel.uiState.collect { state ->
+                    // 1. 更新列表数据
+                    articleAdapter.submitList(state.items)
 
-                        val isListEffectivelyEmpty = articleAdapter.currentList.isEmpty() || articleAdapter.currentList.all { it is ListItem.Placeholder }
-
-                        fullScreenError.isVisible = isListEffectivelyEmpty && state is LoadState.Error
-                        if (state is LoadState.Error) {
-                            errorTextView.text = when(val error = state.error) {
-                                is PagingError.Network -> "网络连接失败，请检查设置"
-                                is PagingError.Server -> "服务器开小差了 (Code: ${error.code})"
-                                is PagingError.Unknown -> "发生未知错误"
-                            }
-                        }
-                        emptyView.isVisible = isListEffectivelyEmpty && state is LoadState.End
+                    // 2. 更新 Footer 状态，这里的逻辑现在变得非常清晰和健壮！
+                    val hasRealData = state.items.any { it.data is ListItem.ArticleItem }
+                    loadStateAdapter.isDataEmpty = !hasRealData
+                    // Footer 只对 Append 和 End 状态做出反应
+                    loadStateAdapter.loadState = if (state.loadState is LoadState.Append || state.loadState is LoadState.End) {
+                        state.loadState
+                    } else {
+                        LoadState.NotLoading // 在刷新等其他状态下，强制隐藏 Footer
                     }
+
+                    // 3. 更新下拉刷新圈，它只对 Refresh.Loading 状态做出反应
+                    swipeRefresh.isRefreshing = state.loadState is LoadState.Refresh.Loading
+
+                    // 4. 更新全屏错误状态，它只对 Refresh.Error 状态做出反应
+                    val isListEmpty = state.items.isEmpty()
+                    fullScreenError.isVisible = isListEmpty && state.loadState is LoadState.Refresh.Error
+                    if (state.loadState is LoadState.Refresh.Error) {
+//                        errorTextView.text = when(val error = state.loadState.error) {
+//                            // ... 更新错误文本 ...
+//                        }
+                    }
+
+                    // 5. 更新空页面状态
+                    emptyView.isVisible = isListEmpty && state.loadState is LoadState.End
                 }
             }
         }
     }
-
 }
