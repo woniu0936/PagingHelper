@@ -1,5 +1,6 @@
 package com.paging.core.engine
 
+import androidx.annotation.RestrictTo
 import com.paging.core.model.LoadState
 import com.paging.core.model.PagingConfig
 import com.paging.core.model.isEnd
@@ -13,17 +14,19 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.coroutines.cancellation.CancellationException
 
-internal interface PagingListener<Value> {
+@RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+interface PagingListener<Value> {
     fun onStateChanged(state: LoadState)
     fun onDataChanged(data: List<Value>)
 }
 
-internal class PagingEngine<Key : Any, Value : Any>(
+@RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+class PagingEngine<Key : Any, Value : Any>(
     private val scope: CoroutineScope,
     private val source: PagingSource<Key, Value>,
     private val config: PagingConfig,
     private val listener: PagingListener<Value>
-) {
+) : PagingController {
     private val mutex = Mutex()
     private var currentKey: Key? = null
     private val currentList = ArrayList<Value>()
@@ -33,17 +36,17 @@ internal class PagingEngine<Key : Any, Value : Any>(
     var currentState: LoadState = LoadState.NotLoading
         private set
 
-    fun refresh() {
+    override fun refresh() {
         loadJob?.cancel()
         loadJob = scope.launch { loadInternal(isRefresh = true) }
     }
 
-    fun loadMore() {
+    override fun loadMore() {
         if (currentState.isLoading || currentState.isEnd || currentState.isError) return
         loadJob = scope.launch { loadInternal(isRefresh = false) }
     }
 
-    fun retry() {
+    override fun retry() {
         if (currentState is LoadState.Error) {
             if ((currentState as LoadState.Error).isRefresh) refresh() else loadMore()
         }

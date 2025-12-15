@@ -1,11 +1,13 @@
 package com.paging.core.ui
 
+import androidx.annotation.RestrictTo
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.paging.core.model.LoadState
 import com.paging.core.model.PagingConfig
 
-internal class PagingBinder(
+@RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+class PagingBinder(
     private val recyclerView: RecyclerView,
     private val config: PagingConfig,
     private val loadMoreAction: () -> Unit
