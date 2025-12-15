@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "PageHelper"
 include(":app")
- 
+include(":paging-core")
