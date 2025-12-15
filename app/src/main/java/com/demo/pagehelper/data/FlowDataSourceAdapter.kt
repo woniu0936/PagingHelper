@@ -1,8 +1,8 @@
 package com.demo.pagehelper.data
 
-import com.demo.pagehelper.DataSource
-import com.demo.pagehelper.ListItem
-import com.demo.pagehelper.PageResult
+import com.demo.pagehelper.datasource.DataSource
+import com.demo.pagehelper.model.ListItem
+import com.demo.pagehelper.model.PageResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 

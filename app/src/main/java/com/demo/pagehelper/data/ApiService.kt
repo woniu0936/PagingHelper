@@ -1,7 +1,7 @@
 package com.demo.pagehelper.data
 
-import com.demo.pagehelper.Article
-import com.demo.pagehelper.ListItem
+import com.demo.pagehelper.model.Article
+import com.demo.pagehelper.model.ListItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow

@@ -17,6 +17,14 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.demo.pagehelper.model.LayoutType
+import com.demo.pagehelper.model.ListItem
+import com.demo.pagehelper.model.LoadState
+import com.demo.pagehelper.model.PagingError
+import com.demo.pagehelper.ui.ArticleAdapter
+import com.demo.pagehelper.ui.PagingLoadStateAdapter
+import com.demo.pagehelper.ui.bindLoadMore
+import com.demo.pagehelper.ui.withLoadStateFooter
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 

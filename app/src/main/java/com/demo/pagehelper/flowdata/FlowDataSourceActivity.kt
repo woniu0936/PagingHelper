@@ -13,14 +13,14 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.demo.pagehelper.LayoutType
-import com.demo.pagehelper.ListItem
-import com.demo.pagehelper.LoadState
-import com.demo.pagehelper.PagingLoadStateAdapter
+import com.demo.pagehelper.model.LayoutType
+import com.demo.pagehelper.model.ListItem
+import com.demo.pagehelper.model.LoadState
 import com.demo.pagehelper.R
-import com.demo.pagehelper.autoConfiguredGridLayoutManager
-import com.demo.pagehelper.bindLoadMore
-import com.demo.pagehelper.withLoadStateFooter
+import com.demo.pagehelper.ui.PagingLoadStateAdapter
+import com.demo.pagehelper.ui.autoConfiguredGridLayoutManager
+import com.demo.pagehelper.ui.bindLoadMore
+import com.demo.pagehelper.ui.withLoadStateFooter
 import kotlinx.coroutines.launch
 
 class FlowDataSourceActivity : AppCompatActivity() {

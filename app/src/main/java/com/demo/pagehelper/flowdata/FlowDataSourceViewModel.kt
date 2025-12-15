@@ -2,8 +2,8 @@ package com.demo.pagehelper.flowdata
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.demo.pagehelper.ListItem
-import com.demo.pagehelper.LoadState
+import com.demo.pagehelper.model.ListItem
+import com.demo.pagehelper.model.LoadState
 import com.demo.pagehelper.PagingHelper
 import com.demo.pagehelper.data.ApiService
 import com.demo.pagehelper.data.FlowDataSourceAdapter

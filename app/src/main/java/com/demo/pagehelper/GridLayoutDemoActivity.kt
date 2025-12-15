@@ -12,6 +12,14 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.demo.pagehelper.model.LayoutType
+import com.demo.pagehelper.model.ListItem
+import com.demo.pagehelper.model.LoadState
+import com.demo.pagehelper.model.PagingError
+import com.demo.pagehelper.ui.ArticleAdapter
+import com.demo.pagehelper.ui.PagingLoadStateAdapter
+import com.demo.pagehelper.ui.bindLoadMore
+import com.demo.pagehelper.ui.withLoadStateFooter
 import kotlinx.coroutines.launch
 
 // 假设所有的核心组件 (PagingHelper, Adapters, ViewModel等) 和 XML 布局都已存在

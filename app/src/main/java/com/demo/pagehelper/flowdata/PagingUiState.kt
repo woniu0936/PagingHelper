@@ -1,7 +1,7 @@
 package com.demo.pagehelper.flowdata
 
-import com.demo.pagehelper.ListItem
-import com.demo.pagehelper.LoadState
+import com.demo.pagehelper.model.ListItem
+import com.demo.pagehelper.model.LoadState
 
 /**
  * [终极方案] 一个统一的 UI 状态数据类。
