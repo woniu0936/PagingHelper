@@ -21,7 +21,11 @@ class PagingBinder(
             override fun onChildViewAttachedToWindow(view: android.view.View) {
                 val pos = recyclerView.getChildAdapterPosition(view)
                 val count = recyclerView.adapter?.itemCount ?: 0
-                if (pos >= count - 1 - config.prefetchDistance) loadMoreAction()
+                if (pos >= count - 1 - config.prefetchDistance) {
+                    recyclerView.post {
+                        loadMoreAction()
+                    }
+                }
             }
 
             override fun onChildViewDetachedFromWindow(view: android.view.View) {}

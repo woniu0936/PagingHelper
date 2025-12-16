@@ -1,13 +1,17 @@
 package com.paging.flow
 
+import android.util.Log
+import com.paging.core.BuildConfig
 import com.paging.core.engine.PagingController
 import com.paging.core.engine.PagingEngine
 import com.paging.core.engine.PagingListener
 import com.paging.core.model.LoadState
 import com.paging.core.model.PagingConfig
 import com.paging.core.source.PagingSource
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.plus
 
 /**
  * [Top-Tier Design] 响应式分页容器。
@@ -47,12 +51,19 @@ class FlowPaging<Key : Any, Value : Any> private constructor(
             val _loadState = MutableStateFlow<LoadState>(LoadState.NotLoading)
             val _data = MutableStateFlow<List<Value>>(emptyList())
 
+            val handler = CoroutineExceptionHandler { _, exception ->
+                if (BuildConfig.DEBUG) {
+                    Log.e("FlowPaging", "🔥 UNCAUGHT COROUTINE EXCEPTION 🔥", exception)
+                }
+            }
+            val safeScope = scope + handler
+
             // 2. 连接 Core Engine
             val listener = object : PagingListener<Value> {
                 override fun onStateChanged(state: LoadState) { _loadState.value = state }
                 override fun onDataChanged(data: List<Value>) { _data.value = data }
             }
-            val engine = PagingEngine(scope, source, config, listener)
+            val engine = PagingEngine(safeScope, source, config, listener)
 
             // 3. 自动启动
             engine.refresh()

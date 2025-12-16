@@ -1,11 +1,13 @@
 package com.paging.flow
 
+import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.paging.core.BuildConfig
 import com.paging.core.model.PagingConfig
 import com.paging.core.ui.PagingBinder
 import com.paging.core.ui.PagingFooterAdapter
@@ -49,6 +51,9 @@ fun <T : Any> FlowPaging<*, T>.bindDataTo(
     adapter: ListAdapter<T, *>
 ) {
     this.data.collectOnLifecycle(lifecycleOwner) { list ->
+        if (BuildConfig.DEBUG) {
+            Log.d("PagingDSL", "Receive Data: size=${list.size}")
+        }
         adapter.submitList(list)
     }
 }

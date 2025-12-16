@@ -1,7 +1,10 @@
 package com.paging.flow
 
+import android.util.Log
 import androidx.lifecycle.LifecycleOwner
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.paging.core.BuildConfig
 import com.paging.core.model.LoadState
 import com.paging.core.model.PagingConfig
 import com.paging.core.ui.PagingFooterAdapter
@@ -30,7 +33,7 @@ class FlowPagingBuilder<Key : Any, Value : Any>(
     private val paging: FlowPaging<Key, Value>
 ) {
     // 必填项
-    lateinit var adapter: androidx.recyclerview.widget.ListAdapter<Value, *>
+    lateinit var adapter: ListAdapter<Value, *>
     lateinit var footerAdapter: PagingFooterAdapter<*>
 
     // 选填项
@@ -60,6 +63,9 @@ class FlowPagingBuilder<Key : Any, Value : Any>(
         // 4. 额外监听
         if (onStateChanged != null) {
             paging.loadState.collectOnLifecycle(lifecycleOwner) { state ->
+                if (BuildConfig.DEBUG) {
+                    Log.d("PagingDSL", "Receive State: $state")
+                }
                 onStateChanged?.invoke(state)
             }
         }
