@@ -9,8 +9,8 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.demo.pagehelper.R
-import com.demo.pagehelper.model.LayoutType
-import com.demo.pagehelper.model.ListItem
+import com.demo.pagehelper.data.LayoutType
+import com.demo.pagehelper.data.ListItem
 import com.facebook.shimmer.ShimmerFrameLayout
 
 /**
@@ -18,8 +18,8 @@ import com.facebook.shimmer.ShimmerFrameLayout
  */
 open class ArticleAdapter(val layoutType: LayoutType) : ListAdapter<ListItem, RecyclerView.ViewHolder>(itemDiff) {
     companion object {
-        private const val TYPE_ARTICLE = 0
-        private const val TYPE_PLACEHOLDER = 1
+        private const val TYPE_ARTICLE = 10
+        private const val TYPE_PLACEHOLDER = 11
 
         val itemDiff = object : DiffUtil.ItemCallback<ListItem>() {
             override fun areItemsTheSame(old: ListItem, new: ListItem): Boolean =

@@ -1,3 +1,3 @@
-package com.demo.pagehelper.model
+package com.demo.pagehelper.data
 
 data class Article(val id: Int, val title: String)

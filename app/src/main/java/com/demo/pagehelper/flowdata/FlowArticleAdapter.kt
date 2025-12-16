@@ -9,10 +9,22 @@ import androidx.appcompat.widget.AppCompatCheckBox
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.demo.pagehelper.model.LayoutType
-import com.demo.pagehelper.model.ListItem
 import com.demo.pagehelper.R
+import com.demo.pagehelper.data.LayoutType
+import com.demo.pagehelper.data.ListItem
 import com.facebook.shimmer.ShimmerFrameLayout
+
+/**
+ * [增强] 为列表项增加选中状态的包装。
+ * 包含原始数据和选中状态。
+ *
+ * @param data 原始的列表项数据 (ArticleItem 或 Placeholder)。
+ * @param isSelected 当前项是否被选中。
+ */
+data class SelectableItem(
+    val data: ListItem,
+    val isSelected: Boolean = false
+)
 
 class FlowArticleAdapter(
     val layoutType: LayoutType,
@@ -20,8 +32,8 @@ class FlowArticleAdapter(
 ) : ListAdapter<SelectableItem, RecyclerView.ViewHolder>(itemDiff) {
 
     companion object {
-        private const val TYPE_ARTICLE = 0
-        private const val TYPE_PLACEHOLDER = 1
+        private const val TYPE_ARTICLE = 10
+        private const val TYPE_PLACEHOLDER = 11
 
         val itemDiff = object : DiffUtil.ItemCallback<SelectableItem>() {
             // isSelected 的变化也需要触发更新，所以比较整个对象
@@ -123,5 +135,4 @@ class FlowArticleAdapter(
             }
         }
     }
-
 }

@@ -1,4 +1,4 @@
-package com.demo.pagehelper.model
+package com.demo.pagehelper.data
 
 enum class LayoutType {
     LINEAR, GRID, STAGGERED

@@ -9,64 +9,73 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.demo.pagehelper.model.LayoutType
-import com.demo.pagehelper.model.ListItem
-import com.demo.pagehelper.model.LoadState
 import com.demo.pagehelper.R
-import com.demo.pagehelper.ui.PagingLoadStateAdapter
-import com.demo.pagehelper.ui.autoConfiguredGridLayoutManager
-import com.demo.pagehelper.ui.bindLoadMore
-import com.demo.pagehelper.ui.withLoadStateFooter
+import com.demo.pagehelper.data.LayoutType
+import com.demo.pagehelper.fullScreen
+import com.demo.pagehelper.ui.AppPagingFooterAdapter
+import com.paging.core.model.LoadState
+import com.paging.core.ui.PagingBinder
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 class FlowDataSourceActivity : AppCompatActivity() {
 
     companion object {
-        private const val PRELOAD_OFFSET = 10
         private const val GRID_SPAN_COUNT = 2
     }
 
     private val viewModel: FlowDataSourceViewModel by lazy { ViewModelProvider(this)[FlowDataSourceViewModel::class.java] }
 
-    // 切换这个枚举值即可改变整个列表的布局！// 第一个参数.GRID或 .LINEAR, .STAGGERED
     private val articleAdapter = FlowArticleAdapter(LayoutType.GRID) { articleId ->
         viewModel.toggleSelection(articleId)
     }
 
-    private val loadStateAdapter = PagingLoadStateAdapter { viewModel.retry() }
+    private val footerAdapter = AppPagingFooterAdapter { viewModel.retry() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_recycler_view)
+        fullScreen(findViewById(R.id.main))
         setupUI()
         setupObservers()
-        if (savedInstanceState == null) viewModel.refresh()
     }
 
     private fun setupUI() {
         val recyclerView: RecyclerView = findViewById(R.id.recycler_view)
         val swipeRefresh: SwipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
+        val fullScreenError: View = findViewById(R.id.full_screen_error_view)
 
-        val concatAdapter = articleAdapter.withLoadStateFooter(loadStateAdapter)
-        recyclerView.adapter = concatAdapter
+        fullScreenError.setOnClickListener { viewModel.retry() }
+        swipeRefresh.setOnRefreshListener { viewModel.refresh() }
 
-        // 根据 Adapter 的类型选择合适的 LayoutManager
         recyclerView.layoutManager = when (articleAdapter.layoutType) {
             LayoutType.LINEAR -> LinearLayoutManager(this)
-            LayoutType.GRID -> recyclerView.autoConfiguredGridLayoutManager(GRID_SPAN_COUNT)
+            LayoutType.GRID -> {
+                val gridLayoutManager = GridLayoutManager(this, GRID_SPAN_COUNT)
+                gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int {
+                        // This logic should be correct, as PagingBinder uses ConcatAdapter
+                        return if (position == articleAdapter.itemCount && footerAdapter.itemCount > 0) {
+                            GRID_SPAN_COUNT
+                        } else {
+                            1
+                        }
+                    }
+                }
+                gridLayoutManager
+            }
             LayoutType.STAGGERED -> StaggeredGridLayoutManager(GRID_SPAN_COUNT, StaggeredGridLayoutManager.VERTICAL)
         }
 
-        recyclerView.bindLoadMore(this, viewModel.helper, PRELOAD_OFFSET)
-
-        swipeRefresh.setOnRefreshListener {
-            swipeRefresh.isRefreshing = true
-            viewModel.refresh()
-        }
+        // Manual PagingBinder setup
+        val binder = PagingBinder(recyclerView, viewModel.pagingConfig, viewModel.paging::loadMore)
+        binder.attach(articleAdapter, footerAdapter)
     }
 
     private fun setupObservers() {
@@ -74,41 +83,31 @@ class FlowDataSourceActivity : AppCompatActivity() {
         val fullScreenError: View = findViewById(R.id.full_screen_error_view)
         val emptyView: View = findViewById(R.id.empty_view)
         val errorTextView: TextView = findViewById(R.id.error_text_view)
-        val errorRetryButton: View = findViewById(R.id.error_retry_button)
-
-        errorRetryButton.setOnClickListener { viewModel.refresh() }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                // [修正] 只观察这一个 uiState Flow！
-                viewModel.uiState.collect { state ->
-                    // 1. 更新列表数据
-                    articleAdapter.submitList(state.items)
-
-                    // 2. 更新 Footer 状态，这里的逻辑现在变得非常清晰和健壮！
-                    val hasRealData = state.items.any { it.data is ListItem.ArticleItem }
-                    loadStateAdapter.isDataEmpty = !hasRealData
-                    // Footer 只对 Append 和 End 状态做出反应
-                    loadStateAdapter.loadState = if (state.loadState is LoadState.Append || state.loadState is LoadState.End) {
-                        state.loadState
-                    } else {
-                        LoadState.NotLoading // 在刷新等其他状态下，强制隐藏 Footer
+                launch {
+                    viewModel.items.collectLatest { items ->
+                        articleAdapter.submitList(items)
                     }
+                }
 
-                    // 3. 更新下拉刷新圈，它只对 Refresh.Loading 状态做出反应
-                    swipeRefresh.isRefreshing = state.loadState is LoadState.Refresh.Loading
+                launch {
+                    viewModel.loadState.collectLatest { state ->
+                        footerAdapter.state = state
+                        swipeRefresh.isRefreshing = state is LoadState.Loading && state.isRefresh
 
-                    // 4. 更新全屏错误状态，它只对 Refresh.Error 状态做出反应
-                    val isListEmpty = state.items.isEmpty()
-                    fullScreenError.isVisible = isListEmpty && state.loadState is LoadState.Refresh.Error
-                    if (state.loadState is LoadState.Refresh.Error) {
-//                        errorTextView.text = when(val error = state.loadState.error) {
-//                            // ... 更新错误文本 ...
-//                        }
+                        val isListEmpty = articleAdapter.itemCount == 0
+                        fullScreenError.isVisible = isListEmpty && state is LoadState.Error && state.isRefresh
+                        if (fullScreenError.isVisible && state is LoadState.Error) {
+                            val error = state.error
+                            errorTextView.text = when (error) {
+                                is IOException -> "网络连接失败，请检查设置"
+                                else -> "发生未知错误: ${error.message}"
+                            }
+                        }
+                        emptyView.isVisible = isListEmpty && state is LoadState.End
                     }
-
-                    // 5. 更新空页面状态
-                    emptyView.isVisible = isListEmpty && state.loadState is LoadState.End
                 }
             }
         }

@@ -1,4 +1,4 @@
-package com.demo.pagehelper.model
+package com.demo.pagehelper.data
 
 /**
  * 使用 Sealed Interface 统一表示列表中的真实数据和占位符。
