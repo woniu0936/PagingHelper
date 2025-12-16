@@ -23,8 +23,22 @@ abstract class PagingFooterAdapter<VH : RecyclerView.ViewHolder>(
             }
         }
 
-    protected open fun shouldDisplay(state: LoadState) =
-        state is LoadState.Loading || state is LoadState.Error || state is LoadState.End
+    protected open fun shouldDisplay(state: LoadState): Boolean {
+        return when (state) {
+            // 1. 如果是 Loading 状态
+            is LoadState.Loading -> !state.isRefresh // 只有 "非刷新" (即加载更多) 时才显示
+
+            // 2. 如果是 Error 状态
+            is LoadState.Error -> !state.isRefresh   // 只有 "非刷新" (即加载更多) 出错时才显示 Footer 的重试按钮
+            // 刷新出错通常由 SwipeRefreshLayout 收起或弹 Toast 处理
+
+            // 3. 如果是 End 状态 (没有更多)
+            is LoadState.End -> true // 总是显示 (或者你可以加逻辑：如果列表为空则不显示)
+
+            // 4. 其他 (NotLoading)
+            else -> false
+        }
+    }
 
     final override fun getItemCount() = if (shouldDisplay(state)) 1 else 0
 
