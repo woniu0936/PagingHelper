@@ -46,13 +46,24 @@ class PagingEngine<Key : Any, Value : Any>(
     }
 
     override fun loadMore() {
+        // 自动加载（滚动触发）必须拦截 Error 状态，防止无限重试
         if (currentState.isLoading || currentState.isEnd || currentState.isError) return
         loadJob = scope.launch { loadInternal(isRefresh = false) }
     }
 
     override fun retry() {
-        if (currentState is LoadState.Error) {
-            if ((currentState as LoadState.Error).isRefresh) refresh() else loadMore()
+        val state = currentState
+        if (state is LoadState.Error) {
+            if (state.isRefresh) {
+                refresh()
+            } else {
+                // [关键修复]
+                // 不要调用 loadMore()，因为它会检查 isError 并拦截。
+                // 这里是手动重试，权限更高，直接发起加载协程。
+                loadJob = scope.launch {
+                    loadInternal(isRefresh = false)
+                }
+            }
         }
     }
 
